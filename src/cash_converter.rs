@@ -39,7 +39,7 @@ impl CashConverter {
 
         CashConverter {
             prefix_inv_list: prefix_list.iter().map(|el| (el.1.clone(), el.0.clone())).collect(),
-            prefix_list: prefix_list,
+            prefix_list,
         }
     }
 
