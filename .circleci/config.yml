@@ -1,0 +1,82 @@
+base_aliases:
+  - restore_cache: &restore_cache_base
+      keys:
+        - v0-cargo-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "Cargo.lock" }}
+  - save_cache: &save_cache_base
+      key: v0-cargo-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "Cargo.lock" }}
+      paths:
+        - target/release/.fingerprint
+        - target/release/build
+        - target/release/deps
+        - target/debug/.fingerprint
+        - target/debug/build
+        - target/debug/deps
+  - run: &setup_base
+      name: setup
+      command: rustup update
+
+version: 2
+
+jobs:
+  test_stable:
+    docker:
+      - image: rust:1.33
+    steps:
+      - run: *setup_base
+      - run: rustup component add clippy
+      - checkout
+      - restore_cache: *restore_cache_base
+      - run:
+          name: build
+          command: cargo build --release
+      - save_cache: *save_cache_base
+      - run:
+          name: lint
+          command: cargo clippy -- -D warnings
+      - run:
+          name: test
+          command: cargo test --release
+
+  test_nightly:
+    docker:
+      - image: rust:1.33
+    steps:
+      - run: *setup_base
+      - run:
+          name: setup nightly and coverage
+          command: |
+            rustup install nightly
+            rustup default nightly
+            cargo install grcov
+            apt-get update
+            apt-get install -y zip
+      - checkout
+      - restore_cache: *restore_cache_base
+      - run:
+          name: build
+          command: |
+            export CARGO_INCREMENTAL=0
+            export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zno-landing-pads"
+            cargo build
+      - save_cache: *save_cache_base
+      - run:
+          name: test
+          command: |
+            export CARGO_INCREMENTAL=0
+            export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zno-landing-pads"
+            cargo test
+      - run:
+          name: coverage
+          command: |
+            zip -0 ccov.zip `find . \( -name "bch_addr*.gc*" \) -print`;
+            grcov ccov.zip -s . -t lcov --llvm --branch --ignore-not-existing --ignore-dir "/*" > lcov.info;
+            bash <(curl -s https://codecov.io/bash) -f lcov.info;
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test_stable
+      - test_nightly:
+          requires:
+            - test_stable
