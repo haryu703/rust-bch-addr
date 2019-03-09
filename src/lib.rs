@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+
+//! cash_addr format implementation inspired by bchaddrjs.
+
 mod error;
 mod cash_converter;
 mod legacy_converter;
@@ -6,20 +10,41 @@ pub use cash_addr::AddressType as AddressType;
 pub use error::{Error, Result};
 use cash_converter::CashConverter;
 
+/// Type of bitcoin netowrk
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Network {
+    /// mainnet
     Mainnet,
+    /// testnet
     Testnet,
+    /// regtest
     Regtest,
 }
 
+/// Type of address format
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum AddressFormat {
+    /// Legacy format.
+    /// Same as bitcoin core address.
     Legacy,
+    /// cash_addr format
+    /// spec: https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/cashaddr.md
     CashAddr,
+    /// other user-defiend format like cash_addr format
+    /// e.g.) slp addr for simpleledger protocol
+    ///     https://github.com/simpleledger/slp-specifications/blob/master/slp-token-type-1.md#slp-addr
+    /// # Arguments
+    /// * `String` - format name
+    /// 
+    /// # Exapmle
+    /// ```
+    /// # use bch_addr::AddressFormat;
+    /// let format = AddressFormat::Other("SLPAddr".to_string());
+    /// ```
     Other(String),
 }
 
+/// Address converter.
 pub struct Converter {
     cash_converter: CashConverter,
 }
@@ -31,17 +56,68 @@ impl Default for Converter {
 }
 
 impl Converter {
+    /// Construct `Converter`.
+    /// # Returns
+    /// * Object for address conversion.
+    /// # Example
+    /// ```
+    /// # use bch_addr::Converter;
+    /// let converter = Converter::new();
+    /// ```
     pub fn new() -> Converter {
         Converter {
             cash_converter: CashConverter::new()
         }
     }
 
+    /// Add user-defined address prefix.
+    /// By calling this function, you can use other address formats.
+    /// # Arguments
+    /// * `prefixes` - Slice of tuple of prefix and `Netorok`.
+    /// * `format_name` - Format name you want to add.
+    /// # Returns
+    /// * Object for address conversion.
+    /// # Example
+    /// ```
+    /// # use bch_addr::{Converter, Network};
+    /// let converter = Converter::new().add_prefixes(
+    ///     &[("simpleledger", Network::Mainnet), ("slptest", Network::Testnet)],
+    ///     "SLPAddr",
+    /// );
+    /// ```
     pub fn add_prefixes(mut self, prefixes: &[(&str, Network)], format_name: &str) -> Converter {
         self.cash_converter = self.cash_converter.add_prefixes(prefixes, format_name);
         self
     }
 
+    /// Convert to cash_addr format with some options.
+    /// # Arguments
+    /// * `legacy` - Address to be converted. Usually legacy format but cash_addr format is acceptable.
+    /// * `format` - (option) Address format. `AddressFormat::CashAddr` or `AddressFormat::Other("other format")` is required.
+    /// * `network` - (option) Address network.
+    /// # Returns
+    /// * Converted address.
+    /// # Example
+    /// ```
+    /// # use bch_addr::{Converter, Network, AddressFormat};
+    /// # let converter = Converter::new().add_prefixes(
+    /// #     &[("simpleledger", Network::Mainnet), ("slptest", Network::Testnet)],
+    /// #     "SLPAddr",
+    /// # );
+    /// let regtest_addr = converter.to_cash_addr_with_options(
+    ///     "mqfRfwGeZnFwfFE7KWJjyg6Yx212iGi6Fi",
+    ///     None,
+    ///     Some(Network::Regtest)
+    /// ).unwrap();
+    /// assert_eq!(regtest_addr, "bchreg:qph5kuz78czq00e3t85ugpgd7xmer5kr7c28g5v92v");
+    /// 
+    /// let slp_addr = converter.to_cash_addr_with_options(
+    ///     "1B9UNtBfkkpgt8kVbwLN9ktE62QKnMbDzR",
+    ///     Some(AddressFormat::Other("SLPAddr".to_string())),
+    ///     None
+    /// ).unwrap();
+    /// assert_eq!(slp_addr, "simpleledger:qph5kuz78czq00e3t85ugpgd7xmer5kr7ccj3fcpsg");
+    /// ```
     pub fn to_cash_addr_with_options(&self, legacy: &str, format: Option<AddressFormat>, network: Option<Network>) -> Result<String> {
         let format = format.unwrap_or(AddressFormat::CashAddr);
 
@@ -64,10 +140,34 @@ impl Converter {
         Err(Error::InvalidAddress(legacy.to_string()))
     }
 
+    /// Convert to cash_addr format.
+    /// # Arguments
+    /// * `legacy` - Address to be converted. Usually legacy format but cash_addr format is acceptable.
+    /// # Returns
+    /// * Converted address.
+    /// # Example
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let cash_addr = converter.to_cash_addr("1B9UNtBfkkpgt8kVbwLN9ktE62QKnMbDzR").unwrap();
+    /// assert_eq!(cash_addr, "bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk");
+    /// ```
     pub fn to_cash_addr(&self, legacy: &str) -> Result<String> {
         self.to_cash_addr_with_options(legacy, None, None)
     }
 
+    /// Convert to legacy format.
+    /// # Arguments
+    /// * `cash` - Address to be converted. Usually cash_addr format but legacy format is acceptable.
+    /// # Returns
+    /// * Converted address.
+    /// # Example
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let cash_addr = converter.to_legacy_addr("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk").unwrap();
+    /// assert_eq!(cash_addr, "1B9UNtBfkkpgt8kVbwLN9ktE62QKnMbDzR");
+    /// ```
     pub fn to_legacy_addr(&self, cash: &str) -> Result<String> {
         if let Ok((_, network, addr_type, hash)) = self.cash_converter.parse(cash) {
             return Ok(legacy_converter::build(network, addr_type, &hash)?);
@@ -81,30 +181,103 @@ impl Converter {
         Err(Error::InvalidAddress(cash.to_string()))
     }
 
+    /// Parse address.
+    /// # Arguments
+    /// * `addr` - Address to be parsed.
+    /// # Returns
+    /// * Address format.
+    /// * Address network.
+    /// * Address type.
+    /// * hashed pubilckey.
+    /// # Example
+    /// ```
+    /// # use bch_addr::{Converter, AddressFormat, Network, AddressType};
+    /// # let converter = Converter::new();
+    /// let (format, network, addr_type, hash) = converter.parse("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk").unwrap();
+    /// assert_eq!(format, AddressFormat::CashAddr);
+    /// assert_eq!(network, Network::Mainnet);
+    /// assert_eq!(addr_type, AddressType::P2PKH);
+    /// assert_eq!(hash.len(), 20);
+    /// ```
     pub fn parse(&self, addr: &str) -> Result<(AddressFormat, Network, AddressType, Vec<u8>)> {
         legacy_converter::parse(addr)
         .or_else(|_| self.cash_converter.parse(addr))
         .or_else(|_| Err(Error::InvalidAddress(addr.to_string())))
     }
 
+    /// Detect address format.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * Address format.
+    /// ```
+    /// # use bch_addr::{Converter, AddressFormat};
+    /// # let converter = Converter::new();
+    /// let format = converter.detect_addr_format("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk").unwrap();
+    /// assert_eq!(format, AddressFormat::CashAddr);
+    /// ```
     pub fn detect_addr_format(&self, addr: &str) -> Result<AddressFormat> {
         let (format, _, _, _) = self.parse(addr)?;
         Ok(format)
     }
 
+    /// Return `true` if the given address is in cash_addr format.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in cash_addr format, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_cash = converter.is_cash_addr("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk");
+    /// assert_eq!(is_cash, true);
+    /// ```
     pub fn is_cash_addr(&self, addr: &str) -> bool {
         self.cash_converter.parse(addr).is_ok()
     }
 
+    /// Return `true` if the given address is in legacy format.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in legacy format, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_legacy = converter.is_legacy_addr("1B9UNtBfkkpgt8kVbwLN9ktE62QKnMbDzR");
+    /// assert_eq!(is_legacy, true);
+    /// ```
     pub fn is_legacy_addr(&self, addr: &str) -> bool {
         legacy_converter::parse(addr).is_ok()
     }
 
+    /// Detect address network.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * Address network.
+    /// ```
+    /// # use bch_addr::{Converter, Network};
+    /// # let converter = Converter::new();
+    /// let network = converter.detect_addr_network("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk").unwrap();
+    /// assert_eq!(network, Network::Mainnet);
+    /// ```
     pub fn detect_addr_network(&self, addr: &str) -> Result<Network> {
         let (_, network, _, _) = self.parse(addr)?;
         Ok(network)
     }
 
+    /// Return `true` if the given address is in mainnet address.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in mainnet address, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_mainnet = converter.is_mainnet_addr("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk");
+    /// assert_eq!(is_mainnet, true);
+    /// ```
     pub fn is_mainnet_addr(&self, addr: &str) -> bool {
         match self.detect_addr_network(addr) {
             Ok(network) => network == Network::Mainnet,
@@ -112,6 +285,17 @@ impl Converter {
         }
     }
 
+    /// Return `true` if the given address is in testnet address.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in testnet address, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_testnet = converter.is_testnet_addr("mqfRfwGeZnFwfFE7KWJjyg6Yx212iGi6Fi");
+    /// assert_eq!(is_testnet, true);
+    /// ```
     pub fn is_testnet_addr(&self, addr: &str) -> bool {
         match self.detect_addr_network(addr) {
             Ok(network) => network == Network::Testnet,
@@ -119,6 +303,17 @@ impl Converter {
         }
     }
 
+    /// Return `true` if the given address is in regtest address.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in regtest address, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_regtest = converter.is_regtest_addr("bchreg:qph5kuz78czq00e3t85ugpgd7xmer5kr7c28g5v92v");
+    /// assert_eq!(is_regtest, true);
+    /// ```
     pub fn is_regtest_addr(&self, addr: &str) -> bool {
         match self.detect_addr_network(addr) {
             Ok(network) => network == Network::Regtest,
@@ -126,11 +321,33 @@ impl Converter {
         }
     }
 
+    /// Detect address type.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * Address type.
+    /// ```
+    /// # use bch_addr::{Converter, AddressType};
+    /// # let converter = Converter::new();
+    /// let addr_type = converter.detect_addr_type("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk").unwrap();
+    /// assert_eq!(addr_type, AddressType::P2PKH);
+    /// ```
     pub fn detect_addr_type(&self, addr: &str) -> Result<AddressType> {
         let (_, _, addr_type, _) = self.parse(addr)?;
         Ok(addr_type)
     }
 
+    /// Return `true` if the given address is in P2PKH address.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in P2PKH address, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_p2pkh = converter.is_p2pkh_addr("bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk");
+    /// assert_eq!(is_p2pkh, true);
+    /// ```
     pub fn is_p2pkh_addr(&self, addr: &str) -> bool {
         match self.detect_addr_type(addr) {
             Ok(format) => format == AddressType::P2PKH,
@@ -138,6 +355,17 @@ impl Converter {
         }
     }
 
+    /// Return `true` if the given address is in P2SH address.
+    /// # Arguments
+    /// * `addr` - Address in any format.
+    /// # Returns
+    /// * `true` if the given address is in P2SH address, `false` otherwise.
+    /// ```
+    /// # use bch_addr::Converter;
+    /// # let converter = Converter::new();
+    /// let is_p2sh = converter.is_p2sh_addr("3BqVJRg7Jf94yJSvj2zxaPFAEYh3MAyyw9");
+    /// assert_eq!(is_p2sh, true);
+    /// ```
     pub fn is_p2sh_addr(&self, addr: &str) -> bool {
         match self.detect_addr_type(addr) {
             Ok(format) => format == AddressType::P2SH,
