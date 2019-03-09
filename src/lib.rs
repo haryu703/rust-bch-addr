@@ -5,6 +5,16 @@
 #![warn(rust_2018_idioms)]
 
 //! cash_addr format implementation inspired by bchaddrjs.
+//! # Example
+//! ```
+//! use bch_addr::Converter;
+//! let converter = Converter::new();
+//! let cash_addr = converter.to_cash_addr("1B9UNtBfkkpgt8kVbwLN9ktE62QKnMbDzR").unwrap();
+//! assert_eq!(cash_addr, "bitcoincash:qph5kuz78czq00e3t85ugpgd7xmer5kr7c5f6jdpwk");
+//! 
+//! let legacy_addr = converter.to_legacy_addr(&cash_addr).unwrap();
+//! assert_eq!(legacy_addr, "1B9UNtBfkkpgt8kVbwLN9ktE62QKnMbDzR");
+//! ```
 
 mod error;
 mod cash_converter;

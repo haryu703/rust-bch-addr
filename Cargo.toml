@@ -4,8 +4,14 @@ version = "0.1.0"
 authors = ["haryu703"]
 edition = "2018"
 
+license = "MIT"
+description = "cash_addr format implementation inspired by bchaddrjs."
+repository = "https://github.com/haryu703/rust-bch-addr"
+readme = "README.md"
+keywords = ["bitcoin", "cash", "BCH"]
+
 [dependencies]
-cash_addr = { git = "https://github.com/haryu703/rust-cash-addr.git" }
+cash_addr = "0.1.0"
 failure = "0.1.5"
 
 [dependencies.bs58]
