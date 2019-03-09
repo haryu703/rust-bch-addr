@@ -13,6 +13,7 @@ struct PrefixDetails {
     network: Network,
 }
 
+#[derive(Debug)]
 pub struct CashConverter {
     prefix_list: HashMap<String, PrefixDetails>,
     prefix_inv_list: HashMap<PrefixDetails, String>,

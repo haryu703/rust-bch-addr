@@ -1,4 +1,8 @@
 #![warn(missing_docs)]
+#![warn(missing_debug_implementations)]
+#![warn(unused)]
+#![warn(nonstandard_style)]
+#![warn(rust_2018_idioms)]
 
 //! cash_addr format implementation inspired by bchaddrjs.
 
@@ -10,7 +14,7 @@ pub use cash_addr::AddressType as AddressType;
 pub use error::{Error, Result};
 use cash_converter::CashConverter;
 
-/// Type of bitcoin netowrk
+/// Type of bitcoin network
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Network {
     /// mainnet
@@ -45,6 +49,7 @@ pub enum AddressFormat {
 }
 
 /// Address converter.
+#[derive(Debug)]
 pub struct Converter {
     cash_converter: CashConverter,
 }
@@ -73,7 +78,7 @@ impl Converter {
     /// Add user-defined address prefix.
     /// By calling this function, you can use other address formats.
     /// # Arguments
-    /// * `prefixes` - Slice of tuple of prefix and `Netorok`.
+    /// * `prefixes` - Slice of tuple of prefix and `Network`.
     /// * `format_name` - Format name you want to add.
     /// # Returns
     /// * Object for address conversion.
